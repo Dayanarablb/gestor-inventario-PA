@@ -11,7 +11,7 @@ export class SolicitudService {
   private readonly baseUrl = `${environment.apiUrl}/solicitudes`;
   private readonly apiBase = environment.apiUrl;
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) { }
 
   crearSolicitud(payload: CrearSolicitudRequest): Observable<Solicitud> {
     return this.http.post<Solicitud>(this.baseUrl, payload);
