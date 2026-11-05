@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, ElementRef, ViewChild, inject, signal, afterNextRender } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from './core/auth/auth.service';
@@ -54,37 +54,19 @@ import { Solicitud, ClasificacionResponse, AuditoriaLog, PoliticaEmpresa } from 
           <!-- Panel de Inicio de Sesión -->
           <div class="login-card">
             <h2>Acceso Institucional</h2>
-            <p class="login-desc">Selecciona un perfil corporativo o ingresa tus credenciales:</p>
+            <p class="login-desc">Ingresa tus credenciales corporativas autorizadas:</p>
 
             <form (ngSubmit)="iniciarSesion()">
               <label>Correo Electrónico:</label>
-              <input type="email" [(ngModel)]="loginEmail" name="email" required placeholder="correo@empresa.com" />
+              <input type="email" [(ngModel)]="loginEmail" name="email" required placeholder="ejemplo@empresa.com" />
 
               <label>Contraseña:</label>
-              <input type="password" [(ngModel)]="loginPass" name="password" required />
+              <input type="password" [(ngModel)]="loginPass" name="password" required placeholder="••••••••" />
 
               <button type="submit" class="btn-primary" [disabled]="loadingAuth()">
-                {{ loadingAuth() ? 'Verificando...' : 'Iniciar Sesión' }}
+                {{ loadingAuth() ? 'Verificando credenciales...' : 'Iniciar Sesión' }}
               </button>
             </form>
-
-            <div class="quick-logins">
-              <p>Perfiles de Prueba Rápidos (Clave: 123456):</p>
-              <div class="quick-btn-group">
-                <button type="button" (click)="seleccionarLogin('empleado@empresa.com')">
-                  <strong>Juan Pérez</strong>
-                  <span>Colaborador / Radicación de trámites y consultas IA</span>
-                </button>
-                <button type="button" (click)="seleccionarLogin('jefe@empresa.com')">
-                  <strong>Carlos Mendoza</strong>
-                  <span>Líder de Área / Aprobación de equipo y trámites personales</span>
-                </button>
-                <button type="button" (click)="seleccionarLogin('admin@empresa.com')">
-                  <strong>Laura Gómez</strong>
-                  <span>Directora RR.HH. / Auditoría, políticas y control global</span>
-                </button>
-              </div>
-            </div>
           </div>
         } @else {
           <!-- Dashboard Principal de Dos Columnas -->
@@ -304,11 +286,10 @@ import { Solicitud, ClasificacionResponse, AuditoriaLog, PoliticaEmpresa } from 
                         <thead>
                           <tr>
                             <th>Registro</th>
-                            <th>Usuario</th>
-                            <th>Método</th>
-                            <th>Recurso URI</th>
+                            <th>Usuario Responsable</th>
+                            <th>Acción Corporativa / Evento</th>
                             <th>Origen IP</th>
-                            <th>Código</th>
+                            <th>Estado HTTP</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -316,9 +297,8 @@ import { Solicitud, ClasificacionResponse, AuditoriaLog, PoliticaEmpresa } from 
                             <tr>
                               <td><span class="mono-id">{{ log.timestamp | slice:0:19 }}</span></td>
                               <td><strong>{{ log.usuarioEmail }}</strong></td>
-                              <td><span class="method-badge">{{ log.metodoHttp }}</span></td>
                               <td><span class="uri-code">{{ log.uriAccedida }}</span></td>
-                              <td>{{ log.ipOrigen }}</td>
+                              <td><span class="ip-badge">{{ formatearIp(log.ipOrigen) }}</span></td>
                               <td>
                                 <span class="http-status" [class.status-ok]="log.codigoEstadoHttp < 400" [class.status-err]="log.codigoEstadoHttp >= 400">
                                   {{ log.codigoEstadoHttp }}
@@ -398,7 +378,7 @@ import { Solicitud, ClasificacionResponse, AuditoriaLog, PoliticaEmpresa } from 
               <!-- Chatbot de Políticas y Consulta de Saldo -->
               <div class="chat-container">
                 <h4>Consulta de Políticas y Saldo Personal</h4>
-                <div class="chat-history">
+                <div class="chat-history" #chatHistoryContainer>
                   @for (msg of chatMessages(); track msg) {
                     <div [class]="msg.sender === 'user' ? 'msg-user' : 'msg-ia'">
                       <span class="msg-author">{{ msg.sender === 'user' ? 'Tú' : 'Asistente RR.HH.' }}</span>
@@ -420,7 +400,7 @@ import { Solicitud, ClasificacionResponse, AuditoriaLog, PoliticaEmpresa } from 
                     (keyup.enter)="enviarChat()"
                     placeholder="Escribe tu consulta sobre vacaciones, permisos o plazos..."
                   />
-                  <button (click)="enviarChat()" [disabled]="loadingChat()">
+                  <button (click)="enviarChat()" [disabled]="loadingChat()" class="btn-chat-send">
                     {{ loadingChat() ? '...' : 'Enviar' }}
                   </button>
                 </div>
@@ -570,6 +550,7 @@ import { Solicitud, ClasificacionResponse, AuditoriaLog, PoliticaEmpresa } from 
     .btn-reject:hover { background: #dc2626; color: #ffffff; border-color: #dc2626; }
 
     /* Auditoría y Políticas */
+    .ip-badge { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.76rem; background: #f1f5f9; padding: 0.15rem 0.4rem; border-radius: 4px; color: #475569; }
     .method-badge { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; padding: 0.15rem 0.35rem; border-radius: 4px; background: #f1f5f9; color: #334155; font-weight: 600; }
     .uri-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; color: #475569; }
     .http-status { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; font-size: 0.75rem; padding: 0.1rem 0.35rem; border-radius: 4px; }
@@ -619,10 +600,10 @@ import { Solicitud, ClasificacionResponse, AuditoriaLog, PoliticaEmpresa } from 
     .msg-ia p { display: inline-block; background: #ffffff; color: #1e293b; border: 1px solid #e2e8f0; padding: 0.5rem 0.75rem; border-radius: 8px; margin: 0.15rem 0; font-size: 0.82rem; max-width: 90%; white-space: pre-wrap; line-height: 1.45; }
     .msg-author { display: block; font-size: 0.7rem; color: #64748b; font-weight: 500; margin-bottom: 0.1rem; }
     
-    .chat-input-row { display: flex; gap: 0.45rem; }
+    .chat-input-row { display: flex; gap: 0.6rem; }
     .chat-input-row input { flex: 1; padding: 0.55rem 0.7rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.84rem; font-family: inherit; }
-    .chat-input-row button { background: #0f172a; color: #ffffff; border: none; padding: 0.55rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.84rem; font-family: inherit; }
-    .chat-input-row button:hover { background: #1e293b; }
+    .btn-chat-send { background: #0f172a; color: #ffffff; border: none; padding: 0.55rem 1.15rem; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.84rem; font-family: inherit; margin-left: 0.5rem; transition: background 0.15s; }
+    .btn-chat-send:hover { background: #1e293b; }
 
     /* Modales */
     .modal-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(2px); display: flex; justify-content: center; align-items: center; z-index: 9999; animation: fadeIn 0.15s ease-out; }
@@ -646,8 +627,8 @@ export class AppComponent {
   solicitudService = inject(SolicitudService);
   iaService = inject(IaAssistantService);
 
-  loginEmail = 'empleado@empresa.com';
-  loginPass = '123456';
+  loginEmail = '';
+  loginPass = '';
   loadingAuth = signal(false);
 
   tabActiva = 'mis-solicitudes';
@@ -683,16 +664,14 @@ export class AppComponent {
   decisionEsAprobacion = signal(true);
   observacionDecision = signal('');
 
-  seleccionarLogin(email: string) {
-    this.loginEmail = email;
-    this.loginPass = '123456';
-  }
+
 
   iniciarSesion() {
     this.loadingAuth.set(true);
     this.auth.login({ email: this.loginEmail, password: this.loginPass }).subscribe({
       next: () => {
         this.loadingAuth.set(false);
+        this.reiniciarEstadoSesion();
         this.cargarMisSolicitudes();
         if (this.auth.hasRole('ROLE_JEFE') || this.auth.hasRole('ROLE_ADMIN_RRHH')) {
           this.cargarPendientes();
@@ -707,7 +686,23 @@ export class AppComponent {
 
   cerrarSesion() {
     this.auth.logout();
+    this.reiniciarEstadoSesion();
+  }
+
+  private reiniciarEstadoSesion() {
     this.tabActiva = 'mis-solicitudes';
+    this.chatInput = '';
+    this.chatMessages.set([
+      { sender: 'ia', text: '¡Hola! Soy tu Asistente de RR.HH. Corporativo. Pregúntame sobre vacaciones, permisos médicos o reembolsos.' }
+    ]);
+    this.textoLibre = '';
+    this.clasificacion.set(null);
+    this.nuevoMotivo = '';
+    this.nuevosDias = 3;
+    this.misSolicitudes.set([]);
+    this.pendientes.set([]);
+    this.logsAuditoria.set([]);
+    this.politicasList.set([]);
   }
 
   // Cargas reactivas de datos
@@ -849,18 +844,39 @@ export class AppComponent {
     });
   }
 
+  @ViewChild('chatHistoryContainer') chatHistoryContainer?: ElementRef<HTMLDivElement>;
+
+  formatearIp(ip: string): string {
+    if (!ip) return '127.0.0.1';
+    if (ip === '0:0:0:0:0:0:0:1' || ip === '::1' || ip.toLowerCase() === 'localhost') {
+      return '127.0.0.1';
+    }
+    return ip;
+  }
+
+  private hacerScrollChat() {
+    setTimeout(() => {
+      if (this.chatHistoryContainer?.nativeElement) {
+        const el = this.chatHistoryContainer.nativeElement;
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      }
+    }, 50);
+  }
+
   // IA - Chat
   enviarChat() {
     if (!this.chatInput.trim()) return;
     const msg = this.chatInput;
     this.chatInput = '';
     this.chatMessages.update(msgs => [...msgs, { sender: 'user', text: msg }]);
+    this.hacerScrollChat();
     this.loadingChat.set(true);
 
     this.iaService.chat(msg).subscribe({
       next: res => {
         this.chatMessages.update(msgs => [...msgs, { sender: 'ia', text: res.respuesta }]);
         this.loadingChat.set(false);
+        this.hacerScrollChat();
       },
       error: () => {
         this.chatMessages.update(msgs => [
@@ -868,6 +884,7 @@ export class AppComponent {
           { sender: 'ia', text: '⚠️ Error de comunicación con el motor de IA. Verifica tu API Key o conexión.' }
         ]);
         this.loadingChat.set(false);
+        this.hacerScrollChat();
       }
     });
   }

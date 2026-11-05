@@ -26,6 +26,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
         // Interceptor de auditoría para operaciones sensibles
         registry.addInterceptor(auditoriaInterceptor)
-                .addPathPatterns("/api/solicitudes/**", "/api/ia/**", "/api/politicas/**");
+                .addPathPatterns("/api/**")
+                .excludePathPatterns("/api/info/**");
     }
 }

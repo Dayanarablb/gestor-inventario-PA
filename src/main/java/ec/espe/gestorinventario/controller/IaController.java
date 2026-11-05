@@ -8,7 +8,9 @@ import ec.espe.gestorinventario.dto.request.TextoLibreDTO;
 import ec.espe.gestorinventario.dto.response.ChatResponseDTO;
 import ec.espe.gestorinventario.dto.response.ClasificacionResponseDTO;
 import ec.espe.gestorinventario.entity.PoliticaEmpresa;
+import ec.espe.gestorinventario.entity.Usuario;
 import ec.espe.gestorinventario.repository.PoliticaEmpresaRepository;
+import ec.espe.gestorinventario.repository.UsuarioRepository;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +19,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
@@ -27,49 +30,55 @@ public class IaController {
 
     private final HrAssistantService hrAssistantService;
     private final HrClasificadorService hrClasificadorService;
+    private final UsuarioRepository usuarioRepository;
     private final PoliticaEmpresaRepository politicaRepository;
-    private final ec.espe.gestorinventario.repository.UsuarioRepository usuarioRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public IaController(HrAssistantService hrAssistantService,
                         HrClasificadorService hrClasificadorService,
-                        PoliticaEmpresaRepository politicaRepository,
-                        ec.espe.gestorinventario.repository.UsuarioRepository usuarioRepository) {
+                        UsuarioRepository usuarioRepository,
+                        PoliticaEmpresaRepository politicaRepository) {
         this.hrAssistantService = hrAssistantService;
         this.hrClasificadorService = hrClasificadorService;
-        this.politicaRepository = politicaRepository;
         this.usuarioRepository = usuarioRepository;
+        this.politicaRepository = politicaRepository;
     }
 
     @PostMapping("/chat")
     public ResponseEntity<ChatResponseDTO> chat(@Valid @RequestBody ChatRequestDTO request, Authentication auth) {
         String usuarioActual = (auth != null && auth.isAuthenticated()) ? auth.getName() : "empleado@empresa.com";
+        log.info("Consulta a asistente IA por usuario: {}", usuarioActual);
 
-        // Obtener datos del colaborador en la base de datos
-        String datosColaborador = usuarioRepository.findByEmail(usuarioActual)
-                .map(u -> String.format("Nombre: %s, Email: %s, Días de vacaciones hábiles disponibles: %d",
-                        u.getNombreCompleto(), u.getEmail(), u.getDiasVacacionesDisponibles()))
-                .orElse("Colaborador registrado con email: " + usuarioActual);
+        // 1. Obtener datos del colaborador directamente desde la BD (PostgreSQL)
+        Optional<Usuario> usuarioOpt = usuarioRepository.findByEmail(usuarioActual);
+        String datosColaborador;
+        if (usuarioOpt.isPresent()) {
+            Usuario u = usuarioOpt.get();
+            datosColaborador = String.format("- Nombre: %s\n- Correo: %s\n- Saldo disponible de vacaciones: %d días hábiles\n- Rol principal: %s",
+                    u.getNombreCompleto(),
+                    u.getEmail(),
+                    u.getDiasVacacionesDisponibles(),
+                    u.getRoles().stream().map(r -> r.getNombre()).findFirst().orElse("EMPLEADO"));
+        } else {
+            datosColaborador = "Colaborador no encontrado en el padrón corporativo para el correo: " + usuarioActual;
+        }
 
-        // Obtener conocimiento interno de políticas empresariales
+        // 2. Obtener políticas activas desde la BD
         List<PoliticaEmpresa> politicas = politicaRepository.findByActivoTrue();
         String contextoPoliticas = politicas.stream()
                 .map(p -> String.format("### %s (%s):\n%s", p.getTitulo(), p.getCategoria(), p.getContenido()))
                 .collect(Collectors.joining("\n\n"));
-
         if (contextoPoliticas.isBlank()) {
-            contextoPoliticas = "No hay políticas cargadas actualmente en el sistema corporativo.";
+            contextoPoliticas = "No hay políticas adicionales registradas.";
         }
 
         try {
-            // Llamada a la IA con contexto de políticas y datos del colaborador
-            String respuesta = hrAssistantService.chat(contextoPoliticas, usuarioActual, datosColaborador, request.mensaje());
-            return ResponseEntity.ok(new ChatResponseDTO(respuesta, !politicas.isEmpty()));
+            // Se envía a Gemini con el contexto inyectado de forma segura y compatible con el endpoint OpenAI
+            String respuesta = hrAssistantService.chat(datosColaborador, contextoPoliticas, request.mensaje());
+            return ResponseEntity.ok(new ChatResponseDTO(respuesta, true));
         } catch (Exception e) {
-            log.error("Error al comunicarse con la API de IA (Gemini): {}", e.getMessage());
-            String errorMsg = "⚠️ No se pudo conectar con el motor de IA de Google Gemini: " + e.getMessage()
-                    + ".\n\nPor favor, asegúrate de colocar tu API Key válida en 'src/main/resources/application.properties' "
-                    + "(propiedad langchain4j.open-ai.chat-model.api-key) o en la variable de entorno GEMINI_API_KEY.";
+            log.error("Error al comunicarse con el motor de IA: {}", e.getMessage(), e);
+            String errorMsg = "⚠️ No se pudo procesar la consulta con el motor de IA: " + e.getMessage();
             return ResponseEntity.ok(new ChatResponseDTO(errorMsg, false));
         }
     }
@@ -78,20 +87,25 @@ public class IaController {
     public ResponseEntity<ClasificacionResponseDTO> clasificar(@Valid @RequestBody TextoLibreDTO request) {
         try {
             String jsonRaw = hrClasificadorService.clasificar(request.texto());
-            log.info("[AI CLASIFICADOR RAW OUTPUT]: {}", jsonRaw);
+            log.info("Respuesta cruda de Gemini Clasificador: {}", jsonRaw);
 
-            // Limpieza si el modelo incluye formato markdown ```json
-            String cleaned = jsonRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
-            ClasificacionResponseDTO dto = objectMapper.readValue(cleaned, ClasificacionResponseDTO.class);
-            return ResponseEntity.ok(dto);
+            String jsonLimpio = jsonRaw.trim();
+            if (jsonLimpio.startsWith("```json")) {
+                jsonLimpio = jsonLimpio.substring(7);
+            }
+            if (jsonLimpio.startsWith("```")) {
+                jsonLimpio = jsonLimpio.substring(3);
+            }
+            if (jsonLimpio.endsWith("```")) {
+                jsonLimpio = jsonLimpio.substring(0, jsonLimpio.length() - 3);
+            }
+            jsonLimpio = jsonLimpio.trim();
+
+            ClasificacionResponseDTO response = objectMapper.readValue(jsonLimpio, ClasificacionResponseDTO.class);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Error en clasificación con IA: {}", e.getMessage());
-            return ResponseEntity.ok(new ClasificacionResponseDTO(
-                    "OTRO",
-                    "MEDIA",
-                    "ADMIN_RRHH",
-                    "Solicitud clasificada por fallback debido a: " + e.getMessage()
-            ));
+            log.error("Error clasificando texto con IA: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
         }
     }
 }

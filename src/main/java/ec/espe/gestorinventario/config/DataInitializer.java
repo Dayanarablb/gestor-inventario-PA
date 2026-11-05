@@ -86,6 +86,16 @@ public class DataInitializer {
             }
 
             // 4. Políticas Corporativas para RAG
+            // Renombrar o reemplazar si existe la política antigua de pruebas
+            politicaRepository.findAll().forEach(p -> {
+                if (p.getTitulo() != null && p.getTitulo().toLowerCase().contains("prueba persistencia")) {
+                    p.setTitulo("Política de Protección de Datos Personales");
+                    p.setCategoria("SEGURIDAD");
+                    p.setContenido("Garantiza el correcto tratamiento, confidencialidad y custodia de la información personal de colaboradores y clientes de conformidad con la normativa de protección de datos.");
+                    politicaRepository.save(p);
+                }
+            });
+
             if (politicaRepository.count() == 0) {
                 politicaRepository.save(new PoliticaEmpresa(
                         "Política de Vacaciones Anuales",

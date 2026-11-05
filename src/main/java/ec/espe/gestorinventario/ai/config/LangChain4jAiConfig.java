@@ -4,7 +4,6 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.service.AiServices;
 import ec.espe.gestorinventario.ai.service.HrAssistantService;
 import ec.espe.gestorinventario.ai.service.HrClasificadorService;
-import ec.espe.gestorinventario.ai.tools.HrDatabaseTools;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
