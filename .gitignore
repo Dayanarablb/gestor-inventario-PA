@@ -4,6 +4,14 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+### Node & Angular ###
+node_modules/
+frontend/node_modules/
+frontend/.angular/
+.angular/
+dist/
+frontend/dist/
+
 ### STS ###
 .apt_generated
 .classpath
