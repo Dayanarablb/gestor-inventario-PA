@@ -23,3 +23,4 @@ EXPOSE 8080
 
 # Comando de arranque optimizado para contenedores
 ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Dserver.port=${PORT}", "-jar", "app.jar"]
+

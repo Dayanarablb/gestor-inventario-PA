@@ -51,3 +51,4 @@ El backend ya tiene configurado `SecurityConfig.java` con:
 - Soporte para credenciales (`allowCredentials: true`) y cabeceras de autorización (`Authorization`).
 
 Esto permite que tu dominio de frontend en Vercel (ej: `https://tu-proyecto.vercel.app`) consuma la API del backend sin bloqueos de origen cruzado (CORS).
+

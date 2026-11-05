@@ -3,3 +3,4 @@ export const environment = {
   // Modificar con la URL de tu backend en producción (Railway, Render, Koyeb, etc.)
   apiUrl: '/api'
 };
+

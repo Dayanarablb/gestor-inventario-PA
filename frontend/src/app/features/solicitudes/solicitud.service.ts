@@ -2,13 +2,14 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { Solicitud, CrearSolicitudRequest, DecisionSolicitudRequest, AuditoriaLog, PoliticaEmpresa } from '../../core/models/models';
+import { environment } from '../../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SolicitudService {
-  private readonly baseUrl = 'http://localhost:8080/api/solicitudes';
-  private readonly apiBase = 'http://localhost:8080/api';
+  private readonly baseUrl = `${environment.apiUrl}/solicitudes`;
+  private readonly apiBase = environment.apiUrl;
 
   constructor(private http: HttpClient) {}
 
